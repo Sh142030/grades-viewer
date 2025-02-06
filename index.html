@@ -32,122 +32,170 @@
         }
 
         // مكون عرض الدرجات
-        function GradesViewer() {
-            const [loading, setLoading] = React.useState(false);
-            const [error, setError] = React.useState(null);
-            const [grades, setGrades] = React.useState(null);
+function GradesViewer() {
+    const [loading, setLoading] = React.useState(false);
+    const [error, setError] = React.useState(null);
+    const [grades, setGrades] = React.useState(null);
+    // إضافة حالة للقوائم المنسدلة
+    const [batches, setBatches] = React.useState([]);
+    const [subjects, setSubjects] = React.useState([]);
+    const [selectedBatch, setSelectedBatch] = React.useState('');
 
-            // دالة لجلب الدرجات من Google Apps Script
-            const fetchGrades = async (batchName, subjectCode) => {
-                setLoading(true);
-                setError(null);
-                
-                try {
-                    const result = await new Promise((resolve, reject) => {
-                        google.script.run
-                            .withSuccessHandler(resolve)
-                            .withFailureHandler(reject)
-                            .getStudentGrades(batchName, subjectCode);
-                    });
-                    
-                    setGrades(result);
-                } catch (err) {
-                    setError(err.message || 'حدث خطأ في جلب البيانات');
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            return (
-                <div className="card">
-                    <div className="card-header">
-                        عرض الدرجات
-                    </div>
-                    <div className="card-body">
-                        {/* نموذج اختيار الدفعة والمادة */}
-                        <form className="row g-3 mb-4" onSubmit={(e) => {
-                            e.preventDefault();
-                            const batch = e.target.batchName.value;
-                            const subject = e.target.subjectCode.value;
-                            if (batch && subject) {
-                                fetchGrades(batch, subject);
-                            }
-                        }}>
-                            <div className="col-md-5">
-                                <label className="form-label">الدفعة</label>
-                                <select name="batchName" className="form-select" required>
-                                    <option value="">اختر الدفعة...</option>
-                                    <option value="دفعة-1">الدفعة الأولى</option>
-                                </select>
-                            </div>
-                            <div className="col-md-5">
-                                <label className="form-label">المادة</label>
-                                <select name="subjectCode" className="form-select" required>
-                                    <option value="">اختر المادة...</option>
-                                    <option value="مادة-1">المادة الأولى</option>
-                                </select>
-                            </div>
-                            <div className="col-md-2 d-flex align-items-end">
-                                <button type="submit" className="btn btn-primary w-100">
-                                    عرض
-                                </button>
-                            </div>
-                        </form>
-
-                        {/* عرض حالة التحميل */}
-                        {loading && (
-                            <div className="text-center p-4">
-                                <div className="spinner-border text-primary" role="status">
-                                    <span className="visually-hidden">جاري التحميل...</span>
-                                </div>
-                                <p className="mt-2">جاري جلب البيانات...</p>
-                            </div>
-                        )}
-
-                        {/* عرض الخطأ */}
-                        {error && (
-                            <div className="alert alert-danger">
-                                {error}
-                            </div>
-                        )}
-
-                        {/* عرض الدرجات */}
-                        {grades && !loading && (
-                            <div className="table-responsive">
-                                <table className="table table-striped">
-                                    <thead>
-                                        <tr>
-                                            <th>الطالب</th>
-                                            <th>المشاركة</th>
-                                            <th>الحضور</th>
-                                            <th>التمارين</th>
-                                            <th>القراءة</th>
-                                            <th>الاختبار</th>
-                                            <th>المجموع</th>
-                                            <th>التقدير</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {grades.map(grade => (
-                                            <tr key={grade.studentId}>
-                                                <td>{grade.fullName}</td>
-                                                <td>{grade.participationGrade}</td>
-                                                <td>{grade.attendanceGrade}</td>
-                                                <td>{grade.exerciseGrade}</td>
-                                                <td>{grade.readingGrade}</td>
-                                                <td>{grade.testGrade}</td>
-                                                <td>{grade.totalGrade}</td>
-                                                <td>{grade.grade}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
+    // دالة لجلب قائمة الدفعات
+    const fetchBatches = async () => {
+        try {
+            const result = await new Promise((resolve, reject) => {
+                google.script.run
+                    .withSuccessHandler(resolve)
+                    .withFailureHandler(reject)
+                    .getBatches();
+            });
+            setBatches(result);
+        } catch (err) {
+            setError('خطأ في جلب قائمة الدفعات: ' + err.message);
         }
+    };
+
+    // دالة لجلب المواد بناءً على الدفعة المختارة
+    const fetchSubjects = async (batchName) => {
+        if (!batchName) {
+            setSubjects([]);
+            return;
+        }
+        try {
+            const result = await new Promise((resolve, reject) => {
+                google.script.run
+                    .withSuccessHandler(resolve)
+                    .withFailureHandler(reject)
+                    .getSubjects(batchName);
+            });
+            setSubjects(result);
+        } catch (err) {
+            setError('خطأ في جلب قائمة المواد: ' + err.message);
+        }
+    };
+
+    // جلب الدفعات عند تحميل المكون
+    React.useEffect(() => {
+        fetchBatches();
+    }, []);
+
+    // جلب المواد عند تغيير الدفعة
+    React.useEffect(() => {
+        fetchSubjects(selectedBatch);
+    }, [selectedBatch]);
+
+    return (
+        <div className="card">
+            <div className="card-header">
+                عرض الدرجات
+            </div>
+            <div className="card-body">
+                <form className="row g-3 mb-4" onSubmit={(e) => {
+                    e.preventDefault();
+                    const subject = e.target.subjectCode.value;
+                    if (selectedBatch && subject) {
+                        fetchGrades(selectedBatch, subject);
+                    }
+                }}>
+                    <div className="col-md-5">
+                        <label className="form-label">الدفعة</label>
+                        <select 
+                            name="batchName" 
+                            className="form-select" 
+                            required
+                            value={selectedBatch}
+                            onChange={(e) => setSelectedBatch(e.target.value)}
+                        >
+                            <option value="">اختر الدفعة...</option>
+                            {batches.map(batch => (
+                                <option key={batch.batchName} value={batch.batchName}>
+                                    {batch.batchName}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="col-md-5">
+                        <label className="form-label">المادة</label>
+                        <select 
+                            name="subjectCode" 
+                            className="form-select" 
+                            required
+                            disabled={!selectedBatch}
+                        >
+                            <option value="">اختر المادة...</option>
+                            {subjects.map(subject => (
+                                <option key={subject.subjectCode} value={subject.subjectCode}>
+                                    {subject.subjectName} ({subject.level})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="col-md-2 d-flex align-items-end">
+                        <button 
+                            type="submit" 
+                            className="btn btn-primary w-100"
+                            disabled={!selectedBatch || subjects.length === 0}
+                        >
+                            عرض
+                        </button>
+                    </div>
+                </form>
+
+                {/* عرض رسائل الخطأ */}
+                {error && (
+                    <div className="alert alert-danger">
+                        {error}
+                    </div>
+                )}
+
+                {/* عرض حالة التحميل */}
+                {loading && (
+                    <div className="text-center p-4">
+                        <div className="spinner-border text-primary" role="status">
+                            <span className="visually-hidden">جاري التحميل...</span>
+                        </div>
+                        <p className="mt-2">جاري جلب البيانات...</p>
+                    </div>
+                )}
+
+                {/* عرض الدرجات */}
+                {grades && !loading && (
+                    <div className="table-responsive">
+                        <table className="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>الطالب</th>
+                                    <th>المشاركة</th>
+                                    <th>الحضور</th>
+                                    <th>التمارين</th>
+                                    <th>القراءة</th>
+                                    <th>الاختبار</th>
+                                    <th>المجموع</th>
+                                    <th>التقدير</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {grades.map(grade => (
+                                    <tr key={grade.studentId}>
+                                        <td>{grade.fullName}</td>
+                                        <td>{grade.participationGrade}</td>
+                                        <td>{grade.attendanceGrade}</td>
+                                        <td>{grade.exerciseGrade}</td>
+                                        <td>{grade.readingGrade}</td>
+                                        <td>{grade.testGrade}</td>
+                                        <td>{grade.totalGrade}</td>
+                                        <td>{grade.grade}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
 
         // المكون الرئيسي
         function App() {
