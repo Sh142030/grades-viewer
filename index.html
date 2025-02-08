@@ -1,280 +1,1992 @@
-
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
-    <meta charset="UTF-8">
-    <title>نظام إدارة الدرجات - جمعية بناء</title>
-    <!-- Bootstrap RTL -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
-    <!-- React -->
-    <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
-    <!-- Babel -->
-    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f8f9fa;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نظام إدارة جمعية بناء</title>
+  
+  <!-- Bootstrap RTL -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.min.css">
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700&display=swap" rel="stylesheet">
+  <!-- React -->
+  <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+  <!-- Babel -->
+  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  
+  <style>
+    body {
+      font-family: 'Almarai', sans-serif;
+      background-color: #f8f9fa;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+    }
+
+    .app {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      background: #2c3e50;
+      color: white;
+      width: 250px;
+      padding: 1rem;
+      transition: all 0.3s ease;
+    }
+
+    .sidebar.collapsed {
+      width: 60px;
+    }
+
+    .sidebar .nav-link {
+      color: rgba(255,255,255,.8);
+      padding: 0.75rem 1rem;
+      margin-bottom: 0.25rem;
+      border-radius: 0.375rem;
+      transition: all 0.2s ease;
+    }
+
+    .sidebar .nav-link:hover {
+      color: white;
+      background: rgba(255,255,255,.1);
+    }
+
+    .sidebar .nav-link.active {
+      color: white;
+      background: #3498db;
+    }
+
+    .main-content {
+      flex: 1;
+      padding: 2rem;
+      transition: all 0.3s ease;
+    }
+
+    .main-content.expanded {
+      margin-right: 60px;
+    }
+
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255,255,255,.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .card {
+      box-shadow: 0 2px 4px rgba(0,0,0,.05);
+      border: none;
+    }
+
+    .table th {
+      font-weight: 600;
+      background-color: #f8f9fa;
+    }
+
+    .form-control:focus, .form-select:focus {
+      border-color: #3498db;
+      box-shadow: 0 0 0 0.2rem rgba(52,152,219,.25);
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        position: fixed;
+        z-index: 1030;
+        height: 100vh;
+        transform: translateX(100%);
+      }
+
+      .sidebar.show {
+        transform: translateX(0);
+      }
+
+      .main-content {
+        margin-right: 0 !important;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div id="root"></div>
+  <div id="root"></div>
 
-    <!-- كل المكونات في نفس الملف -->
-    <script type="text/babel">
-        // دالة للتحقق من بيئة التشغيل
-        const isGoogleAppsScript = () => {
-            return typeof google !== 'undefined' && google.script && google.script.run;
-        };
+  <script type="text/babel">
+    // === Contexts ===
+    const LoadingContext = React.createContext();
+    const AlertContext = React.createContext();
 
-        // بيانات تجريبية للتطوير
-        const mockFetchBatches = () => {
-            return [
-                { batchName: "الدفعة الأولى 1444", programName: "برنامج 1" },
-                { batchName: "الدفعة الثانية 1444", programName: "برنامج 2" }
-            ];
-        };
+    // === Context Providers ===
+    function LoadingProvider({ children }) {
+      const [isLoading, setIsLoading] = React.useState(false);
+      return (
+        <LoadingContext.Provider value={{ isLoading, setIsLoading }}>
+          {children}
+          {isLoading && (
+            <div className="loading-overlay">
+              <div className="spinner-border text-primary" role="status">
+                <span className="visually-hidden">جاري التحميل...</span>
+              </div>
+            </div>
+          )}
+        </LoadingContext.Provider>
+      );
+    }
 
-        const mockFetchSubjects = (batchName) => {
-            return [
-                { subjectCode: "SUB1", subjectName: "المادة الأولى", level: "المستوى الأول" },
-                { subjectCode: "SUB2", subjectName: "المادة الثانية", level: "المستوى الأول" }
-            ];
-        };
+    function AlertProvider({ children }) {
+      const [alert, setAlert] = React.useState(null);
+      
+      const showAlert = (message, type = 'success') => {
+        setAlert({ message, type });
+        setTimeout(() => setAlert(null), 3000);
+      };
+      
+      return (
+        <AlertContext.Provider value={{ alert, showAlert }}>
+          {children}
+          {alert && (
+            <div className={`alert alert-${alert.type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`}
+                 style={{ zIndex: 1050 }}>
+              {alert.message}
+              <button type="button" className="btn-close" onClick={() => setAlert(null)}></button>
+            </div>
+          )}
+        </AlertContext.Provider>
+      );
+    }
 
-        // مكون الترويسة
-        function Header() {
-            return (
-                <header className="bg-dark text-light p-3 rounded mb-4">
-                    <h1 className="h4 mb-0">نظام إدارة الدرجات - جمعية بناء</h1>
-                </header>
-            );
+    // === Custom Hooks ===
+    function useLoading() {
+      return React.useContext(LoadingContext);
+    }
+
+    function useAlert() {
+      return React.useContext(AlertContext);
+    }
+
+    // === Components ===
+    function Sidebar({ isCollapsed, toggleSidebar, activePage, setActivePage }) {
+      const menuItems = [
+        { id: 'dashboard', icon: 'bi-speedometer2', label: 'لوحة المعلومات' },
+        { id: 'programs', icon: 'bi-collection', label: 'البرامج' },
+        { id: 'batches', icon: 'bi-people', label: 'الدفعات' },
+        { id: 'subjects', icon: 'bi-book', label: 'المواد' },
+        { id: 'students', icon: 'bi-person-vcard', label: 'الطلاب' },
+        { id: 'grades', icon: 'bi-clipboard-data', label: 'الدرجات' },
+        { id: 'absences', icon: 'bi-calendar-x', label: 'الغياب' },
+        { id: 'reports', icon: 'bi-file-earmark-bar-graph', label: 'التقارير' },
+      ];
+
+      return (
+        <div className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+          <div className="d-flex justify-content-between align-items-center px-3 mb-4">
+            {!isCollapsed && <h5 className="text-light mb-0">نظام جمعية بناء</h5>}
+            <button className="btn btn-link text-light p-0" onClick={toggleSidebar}>
+              <i className={`bi bi-chevron-${isCollapsed ? 'left' : 'right'}`}></i>
+            </button>
+          </div>
+          <nav className="nav flex-column">
+            {menuItems.map(item => (
+              <a key={item.id}
+                 className={`nav-link ${activePage === item.id ? 'active' : ''}`}
+                 href="#"
+                 onClick={(e) => {
+                   e.preventDefault();
+                   setActivePage(item.id);
+                 }}>
+                <i className={`bi ${item.icon}`}></i>
+                {!isCollapsed && <span className="ms-2">{item.label}</span>}
+              </a>
+            ))}
+          </nav>
+        </div>
+      );
+    }
+
+    function App() {
+      const [isCollapsed, setIsCollapsed] = React.useState(false);
+      const [activePage, setActivePage] = React.useState('dashboard');
+
+      const toggleSidebar = () => {
+        setIsCollapsed(!isCollapsed);
+      };
+
+      const renderPage = () => {
+        switch (activePage) {
+          case 'programs':
+            return <ProgramsManagement />;
+          case 'batches':
+            return <BatchesManagement />;
+          case 'subjects':
+            return <SubjectsManagement />;
+          case 'students':
+            return <StudentsManagement />;
+          case 'grades':
+            return <Grades />;
+          case 'absences':
+            return <Absences />;
+          case 'reports':
+            return <Reports />;
+          case 'dashboard':
+          default:
+            return <Dashboard />;
         }
+      };
 
-        // مكون عرض الدرجات
-        function GradesViewer() {
-            const [loading, setLoading] = React.useState(false);
-            const [error, setError] = React.useState(null);
-            const [grades, setGrades] = React.useState(null);
-            const [batches, setBatches] = React.useState([]);
-            const [subjects, setSubjects] = React.useState([]);
-            const [selectedBatch, setSelectedBatch] = React.useState('');
+      return (
+        <LoadingProvider>
+          <AlertProvider>
+            <div className="app">
+              <Sidebar 
+                isCollapsed={isCollapsed}
+                toggleSidebar={toggleSidebar}
+                activePage={activePage}
+                setActivePage={setActivePage}
+              />
+              <main className={`main-content ${isCollapsed ? 'expanded' : ''}`}>
+                {renderPage()}
+              </main>
+            </div>
+          </AlertProvider>
+        </LoadingProvider>
+      );
+    }
 
-            // دالة لجلب قائمة الدفعات
-            const fetchBatches = async () => {
-                try {
-                    if (isGoogleAppsScript()) {
-                        const result = await new Promise((resolve, reject) => {
-                            google.script.run
-                                .withSuccessHandler(resolve)
-                                .withFailureHandler(reject)
-                                .getBatches();
-                        });
-                        setBatches(result);
-                    } else {
-                        // في بيئة التطوير، نستخدم بيانات تجريبية
-                        setBatches(mockFetchBatches());
-                    }
-                } catch (err) {
-                    setError('خطأ في جلب قائمة الدفعات: ' + err.message);
-                }
-            };
-
-            // دالة لجلب المواد بناءً على الدفعة المختارة
-            const fetchSubjects = async (batchName) => {
-                if (!batchName) {
-                    setSubjects([]);
-                    return;
-                }
-                try {
-                    if (isGoogleAppsScript()) {
-                        const result = await new Promise((resolve, reject) => {
-                            google.script.run
-                                .withSuccessHandler(resolve)
-                                .withFailureHandler(reject)
-                                .getSubjects(batchName);
-                        });
-                        setSubjects(result);
-                    } else {
-                        // في بيئة التطوير، نستخدم بيانات تجريبية
-                        setSubjects(mockFetchSubjects(batchName));
-                    }
-                } catch (err) {
-                    setError('خطأ في جلب قائمة المواد: ' + err.message);
-                }
-            };
-
-            // دالة لجلب الدرجات
-            const fetchGrades = async (batchName, subjectCode) => {
-                setLoading(true);
-                setError(null);
-                try {
-                    if (isGoogleAppsScript()) {
-                        const result = await new Promise((resolve, reject) => {
-                            google.script.run
-                                .withSuccessHandler(resolve)
-                                .withFailureHandler(reject)
-                                .getStudentGrades(batchName, subjectCode);
-                        });
-                        setGrades(result);
-                    } else {
-                        // في بيئة التطوير، نستخدم بيانات تجريبية
-                        setGrades([
-                            {
-                                studentId: "1",
-                                fullName: "طالب تجريبي",
-                                participationGrade: 90,
-                                attendanceGrade: 85,
-                                exerciseGrade: 88,
-                                readingGrade: 92,
-                                testGrade: 95,
-                                totalGrade: 90,
-                                grade: "A"
-                            }
-                        ]);
-                    }
-                } catch (err) {
-                    setError('خطأ في جلب الدرجات: ' + err.message);
-                } finally {
-                    setLoading(false);
-                }
-            };
-
-            // جلب الدفعات عند تحميل المكون
-            React.useEffect(() => {
-                fetchBatches();
-            }, []);
-
-            // جلب المواد عند تغيير الدفعة
-            React.useEffect(() => {
-                fetchSubjects(selectedBatch);
-            }, [selectedBatch]);
-
-            return (
-                <div className="card">
-                    <div className="card-header">
-                        عرض الدرجات
-                    </div>
-                    <div className="card-body">
-                        <form className="row g-3 mb-4" onSubmit={(e) => {
-                            e.preventDefault();
-                            const subject = e.target.subjectCode.value;
-                            if (selectedBatch && subject) {
-                                fetchGrades(selectedBatch, subject);
-                            }
-                        }}>
-                            <div className="col-md-5">
-                                <label className="form-label">الدفعة</label>
-                                <select 
-                                    name="batchName" 
-                                    className="form-select" 
-                                    required
-                                    value={selectedBatch}
-                                    onChange={(e) => setSelectedBatch(e.target.value)}
-                                >
-                                    <option value="">اختر الدفعة...</option>
-                                    {batches.map(batch => (
-                                        <option key={batch.batchName} value={batch.batchName}>
-                                            {batch.batchName}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="col-md-5">
-                                <label className="form-label">المادة</label>
-                                <select 
-                                    name="subjectCode" 
-                                    className="form-select" 
-                                    required
-                                    disabled={!selectedBatch}
-                                >
-                                    <option value="">اختر المادة...</option>
-                                    {subjects.map(subject => (
-                                        <option key={subject.subjectCode} value={subject.subjectCode}>
-                                            {subject.subjectName} ({subject.level})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="col-md-2 d-flex align-items-end">
-                                <button 
-                                    type="submit" 
-                                    className="btn btn-primary w-100"
-                                    disabled={!selectedBatch || subjects.length === 0}
-                                >
-                                    عرض
-                                </button>
-                            </div>
-                        </form>
-
-                        {error && (
-                            <div className="alert alert-danger">
-                                {error}
-                            </div>
-                        )}
-
-                        {loading && (
-                            <div className="text-center p-4">
-                                <div className="spinner-border text-primary" role="status">
-                                    <span className="visually-hidden">جاري التحميل...</span>
-                                </div>
-                                <p className="mt-2">جاري جلب البيانات...</p>
-                            </div>
-                        )}
-
-                        {grades && !loading && (
-                            <div className="table-responsive">
-                                <table className="table table-striped">
-                                    <thead>
-                                        <tr>
-                                            <th>الطالب</th>
-                                            <th>المشاركة</th>
-                                            <th>الحضور</th>
-                                            <th>التمارين</th>
-                                            <th>القراءة</th>
-                                            <th>الاختبار</th>
-                                            <th>المجموع</th>
-                                            <th>التقدير</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {grades.map(grade => (
-                                            <tr key={grade.studentId}>
-                                                <td>{grade.fullName}</td>
-                                                <td>{grade.participationGrade}</td>
-                                                <td>{grade.attendanceGrade}</td>
-                                                <td>{grade.exerciseGrade}</td>
-                                                <td>{grade.readingGrade}</td>
-                                                <td>{grade.testGrade}</td>
-                                                <td>{grade.totalGrade}</td>
-                                                <td>{grade.grade}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
+    // === Place Components Here ===
+    function Dashboard() {
+      return (
+        <div className="container-fluid">
+          <div className="row">
+            <div className="col-12">
+              <h2 className="mb-4">لوحة المعلومات</h2>
+              <div className="card">
+                <div className="card-body">
+                  <p className="mb-0">مرحباً بك في نظام إدارة جمعية بناء</p>
                 </div>
-            );
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function ProgramsManagement() {
+      const [programs, setPrograms] = React.useState([]);
+      const [editMode, setEditMode] = React.useState(false);
+      const [newProgram, setNewProgram] = React.useState({ programId: '', programName: '' });
+      const { setIsLoading } = useLoading();
+      const { showAlert } = useAlert();
+
+      React.useEffect(() => {
+        loadPrograms();
+      }, []);
+
+      const loadPrograms = () => {
+        setIsLoading(true);
+        google.script.run
+          .withSuccessHandler((result) => {
+            setPrograms(result);
+            setIsLoading(false);
+          })
+          .withFailureHandler((error) => {
+            showAlert(error.message, 'danger');
+            setIsLoading(false);
+          })
+          .getPrograms();
+      };
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        
+        if (!newProgram.programId || !newProgram.programName) {
+          showAlert('الرجاء إدخال جميع البيانات المطلوبة', 'danger');
+          return;
         }
 
-        // المكون الرئيسي
-        function App() {
-            return (
-                <div className="container py-4">
-                    <Header />
-                    <GradesViewer />
+        setIsLoading(true);
+        google.script.run
+          .withSuccessHandler(() => {
+            showAlert('تم إضافة البرنامج بنجاح');
+            setNewProgram({ programId: '', programName: '' });
+            loadPrograms();
+            setEditMode(false);
+          })
+          .withFailureHandler((error) => {
+            showAlert(error.message, 'danger');
+            setIsLoading(false);
+          })
+          .addProgram(newProgram);
+      };
+
+      return (
+        <div className="container-fluid">
+          <div className="d-flex justify-content-between align-items-center mb-4">
+            <h2>إدارة البرامج</h2>
+            <button
+              onClick={() => setEditMode(!editMode)}
+              className={`btn ${editMode ? 'btn-danger' : 'btn-primary'}`}
+            >
+              {editMode ? 'إلغاء' : 'إضافة برنامج جديد'}
+            </button>
+          </div>
+
+          {editMode && (
+            <form onSubmit={handleSubmit} className="card mb-4">
+              <div className="card-body">
+                <div className="row">
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label">رقم البرنامج</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={newProgram.programId}
+                      onChange={(e) => setNewProgram({ ...newProgram, programId: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label">اسم البرنامج</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={newProgram.programName}
+                      onChange={(e) => setNewProgram({ ...newProgram, programName: e.target.value })}
+                    />
+                  </div>
                 </div>
-            );
+                <div className="text-end">
+                  <button type="submit" className="btn btn-success">
+                    حفظ
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+
+          <div className="card">
+            <div className="card-body">
+              <div className="table-responsive">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>رقم البرنامج</th>
+                      <th>اسم البرنامج</th>
+                      <th className="text-center">عدد الدفعات</th>
+                      <th className="text-center">الإجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {programs.map((program) => (
+                      <tr key={program.programId}>
+                        <td>{program.programId}</td>
+                        <td>{program.programName}</td>
+                        <td className="text-center">-</td>
+                        <td className="text-center">
+                          <button className="btn btn-sm btn-outline-primary me-2">
+                            <i className="bi bi-pencil"></i>
+                          </button>
+                          <button className="btn btn-sm btn-outline-danger">
+                            <i className="bi bi-trash"></i>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {programs.length === 0 && (
+                      <tr>
+                        <td colSpan="4" className="text-center text-muted py-4">
+                          لا توجد برامج مضافة
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+function BatchesManagement() {
+  const [batches, setBatches] = React.useState([]);
+  const [programs, setPrograms] = React.useState([]);
+  const [editMode, setEditMode] = React.useState(false);
+  const [newBatch, setNewBatch] = React.useState({ 
+    programName: '',
+    batchNumber: '',
+    academicYear: ''
+  });
+  const { setIsLoading } = useLoading();
+  const { showAlert } = useAlert();
+
+  React.useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  const loadInitialData = () => {
+    loadPrograms();
+    loadBatches();
+  };
+
+  const loadPrograms = () => {
+    setIsLoading(true);
+    google.script.run
+      .withSuccessHandler((result) => {
+        // نستقبل البيانات كما هي من getPrograms
+        setPrograms(result);
+        setIsLoading(false);
+      })
+      .withFailureHandler((error) => {
+        showAlert(error.message || 'حدث خطأ أثناء تحميل البرامج', 'danger');
+        setIsLoading(false);
+      })
+      .getPrograms();
+  };
+
+  const loadBatches = () => {
+    google.script.run
+      .withSuccessHandler((result) => {
+        // تحويل البيانات من الجدول إلى كائنات
+        const batchesData = result.map(row => ({
+          batchName: row[0],    // عمود اسم الدفعة
+          programName: row[1],   // عمود اسم البرنامج
+          batchNumber: row[2],   // عمود رقم الدفعة
+          academicYear: row[3]   // عمود العام الدراسي
+        }));
+        setBatches(batchesData);
+      })
+      .withFailureHandler((error) => {
+        showAlert(error.message || 'حدث خطأ أثناء تحميل الدفعات', 'danger');
+      })
+      .getBatches();
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    if (!newBatch.programName || !newBatch.batchNumber || !newBatch.academicYear) {
+      showAlert('الرجاء إدخال جميع البيانات المطلوبة', 'danger');
+      return;
+    }
+
+    // التحقق من وجود البرنامج
+    const program = programs.find(p => p.programName === newBatch.programName);
+    if (!program) {
+      showAlert('البرنامج غير موجود', 'danger');
+      return;
+    }
+
+    const batchData = {
+      batchName: `${newBatch.programName}(${newBatch.batchNumber})${newBatch.academicYear}`,
+      programName: newBatch.programName,
+      batchNumber: newBatch.batchNumber,
+      academicYear: newBatch.academicYear
+    };
+
+    setIsLoading(true);
+    google.script.run
+      .withSuccessHandler(() => {
+        showAlert('تم إضافة الدفعة بنجاح');
+        setNewBatch({ programName: '', batchNumber: '', academicYear: '' });
+        loadBatches();
+        setEditMode(false);
+        setIsLoading(false);
+      })
+      .withFailureHandler((error) => {
+        showAlert(error.message || 'حدث خطأ أثناء إضافة الدفعة', 'danger');
+        setIsLoading(false);
+      })
+      .addBatch(batchData);
+  };
+
+  return (
+    <div className="container-fluid">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h2>إدارة الدفعات</h2>
+        <button
+          onClick={() => setEditMode(!editMode)}
+          className={`btn ${editMode ? 'btn-danger' : 'btn-primary'}`}
+        >
+          {editMode ? 'إلغاء' : 'إضافة دفعة جديدة'}
+        </button>
+      </div>
+
+      {editMode && (
+        <form onSubmit={handleSubmit} className="card mb-4">
+          <div className="card-body">
+            <div className="row">
+              <div className="col-md-6 mb-3">
+                <label className="form-label">البرنامج</label>
+                <select
+                  className="form-select"
+                  value={newBatch.programName}
+                  onChange={(e) => setNewBatch({ ...newBatch, programName: e.target.value })}
+                >
+                  <option value="">-- اختر البرنامج --</option>
+                  {programs.map((program) => (
+                    <option key={program.programId} value={program.programName}>
+                      {program.programName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">رقم الدفعة</label>
+                <input
+                  type="number"
+                  className="form-control"
+                  min="1"
+                  value={newBatch.batchNumber}
+                  onChange={(e) => setNewBatch({ ...newBatch, batchNumber: e.target.value })}
+                  placeholder="مثال: 3"
+                />
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">العام الدراسي</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={newBatch.academicYear}
+                  onChange={(e) => setNewBatch({ ...newBatch, academicYear: e.target.value })}
+                  placeholder="مثال: 1445"
+                />
+              </div>
+            </div>
+            <div className="text-end">
+              <button type="submit" className="btn btn-success">
+                حفظ
+              </button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      <div className="card">
+        <div className="card-body">
+          <div className="table-responsive">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>اسم الدفعة</th>
+                  <th>البرنامج</th>
+                  <th>رقم الدفعة</th>
+                  <th>العام الدراسي</th>
+                  <th className="text-center">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {batches.map((batch) => (
+                  <tr key={`${batch.programName}-${batch.batchNumber}-${batch.academicYear}`}>
+                    <td>{batch.batchName}</td>
+                    <td>{batch.programName}</td>
+                    <td>{batch.batchNumber}</td>
+                    <td>{batch.academicYear}</td>
+                    <td className="text-center">
+                      <button className="btn btn-sm btn-outline-primary me-2" title="تعديل">
+                        <i className="bi bi-pencil"></i>
+                      </button>
+                      <button className="btn btn-sm btn-outline-danger" title="حذف">
+                        <i className="bi bi-trash"></i>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {batches.length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="text-center text-muted py-4">
+                      لا توجد دفعات مضافة
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SubjectsManagement() {
+  const [subjects, setSubjects] = React.useState([]);
+  const [programs, setPrograms] = React.useState([]);
+  const [batches, setBatches] = React.useState([]);
+  const [editMode, setEditMode] = React.useState(false);
+  const [selectedProgram, setSelectedProgram] = React.useState('');
+  const [newSubject, setNewSubject] = React.useState({
+    subjectCode: '',
+    name: '',
+    level: '',
+    batchName: '',
+    hours: '',
+    type: 'مادة'
+  });
+  const { setIsLoading } = useLoading();
+  const { showAlert } = useAlert();
+
+  React.useEffect(() => {
+    loadPrograms();
+  }, []);
+
+  const loadPrograms = () => {
+    setIsLoading(true);
+    google.script.run
+      .withSuccessHandler((result) => {
+        setPrograms(result);
+        setIsLoading(false);
+      })
+      .withFailureHandler((error) => {
+        showAlert(error.message || 'حدث خطأ أثناء تحميل البرامج', 'danger');
+        setIsLoading(false);
+      })
+      .getPrograms();
+  };
+
+  const loadBatches = (programId) => {
+    if (!programId) {
+      setBatches([]);
+      return;
+    }
+    
+    setIsLoading(true);
+    google.script.run
+      .withSuccessHandler((result) => {
+        setBatches(result);
+        setIsLoading(false);
+      })
+      .withFailureHandler((error) => {
+        showAlert(error.message || 'حدث خطأ أثناء تحميل الدفعات', 'danger');
+        setIsLoading(false);
+      })
+      .getBatchesByProgram(programId);
+  };
+
+  const loadSubjects = (batchName) => {
+    if (!batchName) {
+      setSubjects([]);
+      return;
+    }
+    
+    setIsLoading(true);
+    google.script.run
+      .withSuccessHandler((result) => {
+        setSubjects(result);
+        setIsLoading(false);
+      })
+      .withFailureHandler((error) => {
+        showAlert(error.message || 'حدث خطأ أثناء تحميل المواد', 'danger');
+        setIsLoading(false);
+      })
+      .getSubjects(batchName);
+  };
+
+  const handleProgramChange = (e) => {
+    const programId = e.target.value;
+    setSelectedProgram(programId);
+    setNewSubject(prev => ({ ...prev, batchName: '' }));
+    setBatches([]);
+    setSubjects([]);
+    if (programId) {
+      loadBatches(programId);
+    }
+  };
+
+  const handleBatchChange = (e) => {
+    const batchName = e.target.value;
+    setNewSubject(prev => ({ ...prev, batchName }));
+    loadSubjects(batchName);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    if (!newSubject.name || !newSubject.level || !newSubject.batchName || !newSubject.hours) {
+      showAlert('الرجاء إدخال جميع البيانات المطلوبة', 'danger');
+      return;
+    }
+
+    // تكوين رمز المادة من اسم المادة والمستوى
+    const subjectCode = `${newSubject.name}${newSubject.level}`;
+    const subjectData = {
+      ...newSubject,
+      subjectCode
+    };
+
+    setIsLoading(true);
+    google.script.run
+      .withSuccessHandler(() => {
+        showAlert('تم إضافة المادة بنجاح');
+        setNewSubject({
+          ...newSubject,
+          subjectCode: '',
+          name: '',
+          level: '',
+          hours: '',
+          type: 'مادة'
+        });
+        loadSubjects(newSubject.batchName);
+        setEditMode(false);
+        setIsLoading(false);
+      })
+      .withFailureHandler((error) => {
+        showAlert(error.message || 'حدث خطأ أثناء إضافة المادة', 'danger');
+        setIsLoading(false);
+      })
+      .addSubject(subjectData);
+  };
+
+  return (
+    <div className="container-fluid">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h2>إدارة المواد</h2>
+        <button
+          onClick={() => setEditMode(!editMode)}
+          className={`btn ${editMode ? 'btn-danger' : 'btn-primary'}`}
+        >
+          {editMode ? 'إلغاء' : 'إضافة مادة جديدة'}
+        </button>
+      </div>
+
+      <div className="row mb-4">
+        <div className="col-md-6 mb-3">
+          <label className="form-label">اختر البرنامج:</label>
+          <select
+            className="form-select"
+            value={selectedProgram}
+            onChange={handleProgramChange}
+          >
+            <option value="">-- اختر البرنامج --</option>
+            {programs.map((program) => (
+              <option key={program.programId} value={program.programId}>
+                {program.programName}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="col-md-6 mb-3">
+          <label className="form-label">اختر الدفعة:</label>
+          <select
+            className="form-select"
+            value={newSubject.batchName}
+            onChange={handleBatchChange}
+            disabled={!selectedProgram}
+          >
+            <option value="">-- اختر الدفعة --</option>
+            {batches.map((batch) => (
+              <option key={batch.batchId} value={batch.name}>
+                {batch.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {editMode && (
+        <form onSubmit={handleSubmit} className="card mb-4">
+          <div className="card-body">
+            <div className="row">
+              <div className="col-md-6 mb-3">
+                <label className="form-label">اسم المادة</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={newSubject.name}
+                  onChange={(e) => setNewSubject({ ...newSubject, name: e.target.value })}
+                />
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">المستوى</label>
+                <input
+                  type="number"
+                  className="form-control"
+                  min="1"
+                  value={newSubject.level}
+                  onChange={(e) => setNewSubject({ ...newSubject, level: e.target.value })}
+                />
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">عدد الساعات</label>
+                <input
+                  type="number"
+                  className="form-control"
+                  min="1"
+                  value={newSubject.hours}
+                  onChange={(e) => setNewSubject({ ...newSubject, hours: e.target.value })}
+                />
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">نوع المادة</label>
+                <select
+                  className="form-select"
+                  value={newSubject.type}
+                  onChange={(e) => setNewSubject({ ...newSubject, type: e.target.value })}
+                >
+                  <option value="مادة">مادة</option>
+                  <option value="مهارات">مهارات</option>
+                  <option value="حفظ">حفظ</option>
+                </select>
+              </div>
+            </div>
+            <div className="text-end">
+              <button type="submit" className="btn btn-success">
+                حفظ
+              </button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      <div className="card">
+        <div className="card-body">
+          <div className="table-responsive">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>رمز المادة</th>
+                  <th>اسم المادة</th>
+                  <th>المستوى</th>
+                  <th>عدد الساعات</th>
+                  <th>نوع المادة</th>
+                  <th className="text-center">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {subjects.map((subject) => (
+                  <tr key={subject.subjectCode}>
+                    <td>{subject.subjectCode}</td>
+                    <td>{subject.name}</td>
+                    <td>{subject.level}</td>
+                    <td>{subject.hours}</td>
+                    <td>{subject.type}</td>
+                    <td className="text-center">
+                      <button className="btn btn-sm btn-outline-primary me-2" title="تعديل">
+                        <i className="bi bi-pencil"></i>
+                      </button>
+                      <button className="btn btn-sm btn-outline-danger" title="حذف">
+                        <i className="bi bi-trash"></i>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {subjects.length === 0 && (
+                  <tr>
+                    <td colSpan="6" className="text-center text-muted py-4">
+                      {!selectedProgram ? 'الرجاء اختيار برنامج' :
+                       !newSubject.batchName ? 'الرجاء اختيار دفعة' :
+                       'لا توجد مواد مضافة لهذه الدفعة'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StudentsManagement() {
+  const [students, setStudents] = React.useState([]);
+  const [programs, setPrograms] = React.useState([]);
+  const [batches, setBatches] = React.useState([]);
+  const [editMode, setEditMode] = React.useState(false);
+  const [selectedProgram, setSelectedProgram] = React.useState('');
+  const [selectedBatch, setSelectedBatch] = React.useState('');
+  const [newStudent, setNewStudent] = React.useState({
+    studentId: '',
+    firstName: '',
+    secondName: '',
+    thirdName: '',
+    lastName: '',
+    fullName: '',
+    email: '',
+    phone: '',
+    additionalPhone: '',
+    nationalId: '',
+    gender: 'ذكر',
+    nationality: 'سعودي',
+    batchName: ''
+  });
+  const { setIsLoading } = useLoading();
+  const { showAlert } = useAlert();
+
+  React.useEffect(() => {
+    loadPrograms();
+    loadStudents(null); // تحميل جميع الطلاب عند بداية المكون
+  }, []);
+
+  const loadPrograms = () => {
+    setIsLoading(true);
+    google.script.run
+      .withSuccessHandler((result) => {
+        setPrograms(result);
+        setIsLoading(false);
+      })
+      .withFailureHandler((error) => {
+        showAlert(error.message || 'حدث خطأ أثناء تحميل البرامج', 'danger');
+        setIsLoading(false);
+      })
+      .getPrograms();
+  };
+
+  const loadBatches = (programId) => {
+    if (!programId) {
+      setBatches([]);
+      return;
+    }
+    
+    setIsLoading(true);
+    google.script.run
+      .withSuccessHandler((result) => {
+        setBatches(result);
+        setIsLoading(false);
+      })
+      .withFailureHandler((error) => {
+        showAlert(error.message || 'حدث خطأ أثناء تحميل الدفعات', 'danger');
+        setIsLoading(false);
+      })
+      .getBatchesByProgram(programId);
+  };
+
+  const loadStudents = (batchName) => {
+    setIsLoading(true);
+    google.script.run
+      .withSuccessHandler((result) => {
+        if (result && Array.isArray(result)) {
+          setStudents(result);
+        } else {
+          setStudents([]);
+        }
+        setIsLoading(false);
+      })
+      .withFailureHandler((error) => {
+        showAlert(error.message || 'حدث خطأ أثناء تحميل الطلاب', 'danger');
+        setStudents([]);
+        setIsLoading(false);
+      })
+      .getStudents(batchName);
+  };
+
+  const handleProgramChange = (e) => {
+    const programId = e.target.value;
+    setSelectedProgram(programId);
+    setSelectedBatch('');
+    setNewStudent(prev => ({ ...prev, batchName: '' }));
+    setBatches([]);
+    if (programId) {
+      loadBatches(programId);
+      const program = programs.find(p => p.programId === programId);
+      if (program) {
+        loadStudents(program.programName);
+      }
+    }
+  };
+
+  const handleBatchChange = (e) => {
+    const batchName = e.target.value;
+    setSelectedBatch(batchName);
+    setNewStudent(prev => ({ ...prev, batchName }));
+    loadStudents(batchName);
+  };
+
+  const updateFullName = (studentData) => {
+    const { firstName, secondName, thirdName, lastName } = studentData;
+    const fullName = [firstName, secondName, thirdName, lastName]
+      .filter(Boolean)
+      .join(' ');
+    return { ...studentData, fullName };
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setNewStudent(prev => {
+      const updated = { ...prev, [name]: value };
+      if (['firstName', 'secondName', 'thirdName', 'lastName'].includes(name)) {
+        return updateFullName(updated);
+      }
+      return updated;
+    });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    if (!newStudent.firstName || !newStudent.lastName || !newStudent.nationalId || !newStudent.batchName) {
+      showAlert('الرجاء إدخال جميع البيانات المطلوبة', 'danger');
+      return;
+    }
+
+    setIsLoading(true);
+    google.script.run
+      .withSuccessHandler(() => {
+        showAlert('تم إضافة الطالب بنجاح');
+        setNewStudent({
+          ...newStudent,
+          studentId: '',
+          firstName: '',
+          secondName: '',
+          thirdName: '',
+          lastName: '',
+          fullName: '',
+          email: '',
+          phone: '',
+          additionalPhone: '',
+          nationalId: ''
+        });
+        loadStudents(newStudent.batchName);
+        setEditMode(false);
+        setIsLoading(false);
+      })
+      .withFailureHandler((error) => {
+        showAlert(error.message || 'حدث خطأ أثناء إضافة الطالب', 'danger');
+        setIsLoading(false);
+      })
+      .addStudent(newStudent);
+  };
+
+  return (
+    <div className="container-fluid">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h2>إدارة الطلاب</h2>
+        <button
+          onClick={() => setEditMode(!editMode)}
+          className={`btn ${editMode ? 'btn-danger' : 'btn-primary'}`}
+        >
+          {editMode ? 'إلغاء' : 'إضافة طالب جديد'}
+        </button>
+      </div>
+
+      <div className="row mb-4">
+        <div className="col-md-6 mb-3">
+          <label className="form-label">اختر البرنامج:</label>
+          <select
+            className="form-select"
+            value={selectedProgram}
+            onChange={handleProgramChange}
+          >
+            <option value="">-- اختر البرنامج --</option>
+            {programs.map((program) => (
+              <option key={program.programId} value={program.programId}>
+                {program.programName}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="col-md-6 mb-3">
+          <label className="form-label">اختر الدفعة:</label>
+          <select
+            className="form-select"
+            value={selectedBatch}
+            onChange={handleBatchChange}
+            disabled={!selectedProgram}
+          >
+            <option value="">-- اختر الدفعة --</option>
+            {batches.map((batch) => (
+              <option key={batch.batchId} value={batch.name}>
+                {batch.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="col-12">
+          <button 
+            className="btn btn-secondary w-100" 
+            onClick={() => {
+              setSelectedProgram('');
+              setSelectedBatch('');
+              setBatches([]);
+              loadStudents(null);
+            }}
+          >
+            عرض جميع الطلاب
+          </button>
+        </div>
+      </div>
+
+      {editMode && (
+        <form onSubmit={handleSubmit} className="card mb-4">
+          <div className="card-body">
+            <div className="row">
+              <div className="col-md-3 mb-3">
+                <label className="form-label">الاسم الأول</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  name="firstName"
+                  value={newStudent.firstName}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="col-md-3 mb-3">
+                <label className="form-label">اسم الأب</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  name="secondName"
+                  value={newStudent.secondName}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="col-md-3 mb-3">
+                <label className="form-label">اسم الجد</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  name="thirdName"
+                  value={newStudent.thirdName}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="col-md-3 mb-3">
+                <label className="form-label">اسم العائلة</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  name="lastName"
+                  value={newStudent.lastName}
+                  onChange={handleInputChange}
+                />
+              </div>
+              
+              <div className="col-md-6 mb-3">
+                <label className="form-label">البريد الإلكتروني</label>
+                <input
+                  type="email"
+                  className="form-control"
+                  name="email"
+                  value={newStudent.email}
+                  onChange={handleInputChange}
+                  dir="ltr"
+                />
+              </div>
+              <div className="col-md-6 mb-3">
+                <label className="form-label">رقم الجوال</label>
+                <input
+                  type="tel"
+                  className="form-control"
+                  name="phone"
+                  value={newStudent.phone}
+                  onChange={handleInputChange}
+                  dir="ltr"
+                />
+              </div>
+              
+              <div className="col-md-4 mb-3">
+                <label className="form-label">رقم الجوال الإضافي</label>
+                <input
+                  type="tel"
+                  className="form-control"
+                  name="additionalPhone"
+                  value={newStudent.additionalPhone}
+                  onChange={handleInputChange}
+                  dir="ltr"
+                />
+              </div>
+              <div className="col-md-4 mb-3">
+                <label className="form-label">رقم الهوية</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  name="nationalId"
+                  value={newStudent.nationalId}
+                  onChange={handleInputChange}
+                  dir="ltr"
+                />
+              </div>
+              <div className="col-md-4 mb-3">
+                <label className="form-label">الجنس</label>
+                <select
+                  className="form-select"
+                  name="gender"
+                  value={newStudent.gender}
+                  onChange={handleInputChange}
+                >
+                  <option value="ذكر">ذكر</option>
+                  <option value="أنثى">أنثى</option>
+                </select>
+              </div>
+            </div>
+            <div className="text-end">
+              <button type="submit" className="btn btn-success">
+                حفظ
+              </button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      <div className="card">
+        <div className="card-body">
+          <div className="table-responsive">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>رقم الطالب</th>
+                  <th>الاسم الكامل</th>
+                  <th>رقم الهوية</th>
+                  <th>رقم الجوال</th>
+                  <th>رقم الجوال الإضافي</th>
+                  <th>البريد الإلكتروني</th>
+                  <th className="text-center">الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {students.map((student) => (
+                  <tr key={student.studentId}>
+                    <td>{student.studentId}</td>
+                    <td>{student.fullName}</td>
+                    <td>{student.nationalId}</td>
+                    <td>{student.phone}</td>
+                    <td>{student.additionalPhone}</td>
+                    <td>{student.email}</td>
+                    <td className="text-center">
+                      <button className="btn btn-sm btn-outline-primary me-2" title="تعديل">
+                        <i className="bi bi-pencil"></i>
+                      </button>
+                      <button className="btn btn-sm btn-outline-danger" title="حذف">
+                        <i className="bi bi-trash"></i>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {students.length === 0 && (
+                  <tr>
+                    <td colSpan="7" className="text-center text-muted py-4">
+                      {!selectedProgram ? 'الرجاء اختيار برنامج' :
+                       !selectedBatch ? 'الرجاء اختيار دفعة' :
+                       'لا يوجد طلاب مسجلين في هذه الدفعة'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Grades() {
+  const [programs, setPrograms] = React.useState([]);
+  const [batches, setBatches] = React.useState([]);
+  const [subjects, setSubjects] = React.useState([]);
+  const [grades, setGrades] = React.useState([]);
+  const [selectedProgram, setSelectedProgram] = React.useState('');
+  const [selectedBatch, setSelectedBatch] = React.useState('');
+  const [selectedSubject, setSelectedSubject] = React.useState('');
+  const [editMode, setEditMode] = React.useState(false);
+  
+  const { setIsLoading } = useLoading();
+  const { showAlert } = useAlert();
+
+  React.useEffect(() => {
+    loadPrograms();
+  }, []);
+
+  const loadPrograms = () => {
+    setIsLoading(true);
+    google.script.run
+      .withSuccessHandler((result) => {
+        setPrograms(result);
+        setIsLoading(false);
+      })
+      .withFailureHandler((error) => {
+        showAlert(error.message || 'حدث خطأ أثناء تحميل البرامج', 'danger');
+        setIsLoading(false);
+      })
+      .getPrograms();
+  };
+
+  const loadBatches = (programId) => {
+    if (!programId) {
+      setBatches([]);
+      return;
+    }
+    
+    setIsLoading(true);
+    google.script.run
+      .withSuccessHandler((result) => {
+        setBatches(result);
+        setIsLoading(false);
+      })
+      .withFailureHandler((error) => {
+        showAlert(error.message || 'حدث خطأ أثناء تحميل الدفعات', 'danger');
+        setIsLoading(false);
+      })
+      .getBatchesByProgram(programId);
+  };
+
+  const loadSubjects = (batchName) => {
+    if (!batchName) {
+      setSubjects([]);
+      return;
+    }
+    
+    setIsLoading(true);
+    google.script.run
+      .withSuccessHandler((result) => {
+        setSubjects(result);
+        setIsLoading(false);
+      })
+      .withFailureHandler((error) => {
+        showAlert(error.message || 'حدث خطأ أثناء تحميل المواد', 'danger');
+        setIsLoading(false);
+      })
+      .getSubjects(batchName);
+  };
+
+  const loadGrades = (batchName, subjectCode) => {
+    if (!batchName || !subjectCode) {
+      setGrades([]);
+      return;
+    }
+    
+    setIsLoading(true);
+    google.script.run
+      .withSuccessHandler((result) => {
+        setGrades(result);
+        setIsLoading(false);
+      })
+      .withFailureHandler((error) => {
+        showAlert(error.message || 'حدث خطأ أثناء تحميل الدرجات', 'danger');
+        setIsLoading(false);
+      })
+      .getGrades(batchName, subjectCode);
+  };
+
+  const handleProgramChange = (e) => {
+    const programId = e.target.value;
+    setSelectedProgram(programId);
+    setSelectedBatch('');
+    setSelectedSubject('');
+    setBatches([]);
+    setSubjects([]);
+    setGrades([]);
+    if (programId) {
+      loadBatches(programId);
+    }
+  };
+
+  const handleBatchChange = (e) => {
+    const batchName = e.target.value;
+    setSelectedBatch(batchName);
+    setSelectedSubject('');
+    setSubjects([]);
+    setGrades([]);
+    if (batchName) {
+      loadSubjects(batchName);
+    }
+  };
+
+  const handleSubjectChange = (e) => {
+    const subjectCode = e.target.value;
+    setSelectedSubject(subjectCode);
+    if (subjectCode && selectedBatch) {
+      loadGrades(selectedBatch, subjectCode);
+    } else {
+      setGrades([]);
+    }
+  };
+
+  const handleGradeChange = (studentId, field, value) => {
+    setGrades(prevGrades => 
+      prevGrades.map(grade => {
+        if (grade.studentId === studentId) {
+          const updatedGrade = { ...grade, [field]: Number(value) || 0 };
+          // حساب المجموع
+          const total = 
+            (updatedGrade.participationGrade || 0) +
+            (updatedGrade.attendanceGrade || 0) +
+            (updatedGrade.exerciseGrade || 0) +
+            (updatedGrade.readingGrade || 0) +
+            (updatedGrade.testGrade || 0);
+          
+          // تحديد التقدير
+          let gradeLevel = 'F';
+          if (total >= 90) gradeLevel = 'A';
+          else if (total >= 80) gradeLevel = 'B';
+          else if (total >= 70) gradeLevel = 'C';
+          else if (total >= 60) gradeLevel = 'D';
+          
+          return {
+            ...updatedGrade,
+            total,
+            grade: gradeLevel
+          };
+        }
+        return grade;
+      })
+    );
+  };
+
+  const handleSubmit = () => {
+    if (!selectedBatch || !selectedSubject) {
+      showAlert('الرجاء اختيار الدفعة والمادة', 'danger');
+      return;
+    }
+
+    setIsLoading(true);
+    google.script.run
+      .withSuccessHandler(() => {
+        showAlert('تم حفظ الدرجات بنجاح');
+        setEditMode(false);
+        setIsLoading(false);
+      })
+      .withFailureHandler((error) => {
+        showAlert(error.message || 'حدث خطأ أثناء حفظ الدرجات', 'danger');
+        setIsLoading(false);
+      })
+      .saveGrades({
+        batchName: selectedBatch,
+        subjectCode: selectedSubject,
+        grades: grades
+      });
+  };
+
+  return (
+    <div className="container-fluid">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h2>إدارة الدرجات</h2>
+        <button
+          onClick={() => setEditMode(!editMode)}
+          className={`btn ${editMode ? 'btn-danger' : 'btn-primary'}`}
+          disabled={!selectedSubject}
+        >
+          {editMode ? 'إلغاء' : 'تعديل الدرجات'}
+        </button>
+      </div>
+
+      <div className="row mb-4">
+        <div className="col-md-4 mb-3">
+          <label className="form-label">البرنامج:</label>
+          <select
+            className="form-select"
+            value={selectedProgram}
+            onChange={handleProgramChange}
+          >
+            <option value="">-- اختر البرنامج --</option>
+            {programs.map((program) => (
+              <option key={program.programId} value={program.programId}>
+                {program.programName}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="col-md-4 mb-3">
+          <label className="form-label">الدفعة:</label>
+          <select
+            className="form-select"
+            value={selectedBatch}
+            onChange={handleBatchChange}
+            disabled={!selectedProgram}
+          >
+            <option value="">-- اختر الدفعة --</option>
+            {batches.map((batch) => (
+              <option key={batch.batchId} value={batch.name}>
+                {batch.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="col-md-4 mb-3">
+          <label className="form-label">المادة:</label>
+          <select
+            className="form-select"
+            value={selectedSubject}
+            onChange={handleSubjectChange}
+            disabled={!selectedBatch}
+          >
+            <option value="">-- اختر المادة --</option>
+            {subjects.map((subject) => (
+              <option key={subject.subjectCode} value={subject.subjectCode}>
+                {subject.name} - المستوى {subject.level}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {selectedSubject && (
+        <div className="card">
+          <div className="card-body">
+            <div className="table-responsive">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>اسم الطالب</th>
+                    <th className="text-center">المشاركة (10)</th>
+                    <th className="text-center">الحضور (30)</th>
+                    <th className="text-center">التمارين (5)</th>
+                    <th className="text-center">القراءة (5)</th>
+                    <th className="text-center">الاختبار (50)</th>
+                    <th className="text-center">المجموع</th>
+                    <th className="text-center">التقدير</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {grades.map((grade) => (
+                    <tr key={grade.studentId}>
+                      <td>{grade.studentName}</td>
+                      <td className="text-center">
+                        {editMode ? (
+                          <input
+                            type="number"
+                            className="form-control form-control-sm mx-auto"
+                            style={{ width: '70px' }}
+                            min="0"
+                            max="10"
+                            value={grade.participationGrade || 0}
+                            onChange={(e) => handleGradeChange(grade.studentId, 'participationGrade', e.target.value)}
+                          />
+                        ) : (
+                          grade.participationGrade || 0
+                        )}
+                      </td>
+                      <td className="text-center">
+                        {editMode ? (
+                          <input
+                            type="number"
+                            className="form-control form-control-sm mx-auto"
+                            style={{ width: '70px' }}
+                            min="0"
+                            max="30"
+                            value={grade.attendanceGrade || 0}
+                            onChange={(e) => handleGradeChange(grade.studentId, 'attendanceGrade', e.target.value)}
+                          />
+                        ) : (
+                          grade.attendanceGrade || 0
+                        )}
+                      </td>
+                      <td className="text-center">
+                        {editMode ? (
+                          <input
+                            type="number"
+                            className="form-control form-control-sm mx-auto"
+                            style={{ width: '70px' }}
+                            min="0"
+                            max="5"
+                            value={grade.exerciseGrade || 0}
+                            onChange={(e) => handleGradeChange(grade.studentId, 'exerciseGrade', e.target.value)}
+                          />
+                        ) : (
+                          grade.exerciseGrade || 0
+                        )}
+                      </td>
+                      <td className="text-center">
+                        {editMode ? (
+                          <input
+                            type="number"
+                            className="form-control form-control-sm mx-auto"
+                            style={{ width: '70px' }}
+                            min="0"
+                            max="5"
+                            value={grade.readingGrade || 0}
+                            onChange={(e) => handleGradeChange(grade.studentId, 'readingGrade', e.target.value)}
+                          />
+                        ) : (
+                          grade.readingGrade || 0
+                        )}
+                      </td>
+                      <td className="text-center">
+                        {editMode ? (
+                          <input
+                            type="number"
+                            className="form-control form-control-sm mx-auto"
+                            style={{ width: '70px' }}
+                            min="0"
+                            max="50"
+                            value={grade.testGrade || 0}
+                            onChange={(e) => handleGradeChange(grade.studentId, 'testGrade', e.target.value)}
+                          />
+                        ) : (
+                          grade.testGrade || 0
+                        )}
+                      </td>
+                      <td className="text-center fw-bold">{grade.total}</td>
+                      <td className="text-center">
+                        <span className={`badge bg-${
+                          grade.grade === 'A' ? 'success' :
+                          grade.grade === 'B' ? 'primary' :
+                          grade.grade === 'C' ? 'info' :
+                          grade.grade === 'D' ? 'warning' :
+                          'danger'
+                        }`}>
+                          {grade.grade}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {grades.length === 0 && (
+                    <tr>
+                      <td colSpan="8" className="text-center text-muted py-4">
+                        لا توجد درجات مسجلة
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            
+            {editMode && grades.length > 0 && (
+              <div className="text-end mt-3">
+                <button
+                  className="btn btn-success"
+                  onClick={handleSubmit}
+                >
+                  حفظ الدرجات
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+function Absences() {
+      const [selectedProgram, setSelectedProgram] = React.useState('');
+      const [selectedBatch, setSelectedBatch] = React.useState('');
+      const [selectedSubject, setSelectedSubject] = React.useState('');
+      const [selectedDate, setSelectedDate] = React.useState('');
+      const [absenceData, setAbsenceData] = React.useState([]);
+      const [programs, setPrograms] = React.useState([]);
+      const [batches, setBatches] = React.useState([]);
+      const [subjects, setSubjects] = React.useState([]);
+      const { setIsLoading } = useLoading();
+      const { showAlert } = useAlert();
+
+      React.useEffect(() => {
+        loadPrograms();
+      }, []);
+
+      const loadPrograms = () => {
+        setIsLoading(true);
+        google.script.run
+          .withSuccessHandler((result) => {
+            setPrograms(result);
+            setIsLoading(false);
+          })
+          .withFailureHandler((error) => {
+            showAlert(error.message || 'حدث خطأ أثناء تحميل البرامج', 'danger');
+            setIsLoading(false);
+          })
+          .getPrograms();
+      };
+
+      const loadBatches = (programId) => {
+        if (!programId) {
+          setBatches([]);
+          return;
+        }
+        
+        setIsLoading(true);
+        google.script.run
+          .withSuccessHandler((result) => {
+            setBatches(result);
+            setIsLoading(false);
+          })
+          .withFailureHandler((error) => {
+            showAlert(error.message || 'حدث خطأ أثناء تحميل الدفعات', 'danger');
+            setIsLoading(false);
+          })
+          .getBatchesByProgram(programId);
+      };
+
+      const loadSubjects = (batchName) => {
+        if (!batchName) {
+          setSubjects([]);
+          return;
+        }
+        
+        setIsLoading(true);
+        google.script.run
+          .withSuccessHandler((result) => {
+            setSubjects(result);
+            setIsLoading(false);
+          })
+          .withFailureHandler((error) => {
+            showAlert(error.message || 'حدث خطأ أثناء تحميل المواد', 'danger');
+            setIsLoading(false);
+          })
+          .getSubjects(batchName);
+      };
+
+      const loadAbsenceData = () => {
+        if (!selectedBatch || !selectedSubject || !selectedDate) {
+          setAbsenceData([]);
+          return;
         }
 
-        // تشغيل التطبيق
-        ReactDOM.render(
-            <App />,
-            document.getElementById('root')
+        setIsLoading(true);
+        google.script.run
+          .withSuccessHandler((result) => {
+            setAbsenceData(result);
+            setIsLoading(false);
+          })
+          .withFailureHandler((error) => {
+            showAlert(error.message || 'حدث خطأ أثناء تحميل بيانات الغياب', 'danger');
+            setIsLoading(false);
+          })
+          .getAbsences(selectedBatch, selectedSubject, selectedDate);
+      };
+
+      const handleProgramChange = (e) => {
+        const programId = e.target.value;
+        setSelectedProgram(programId);
+        setSelectedBatch('');
+        setSelectedSubject('');
+        setBatches([]);
+        setSubjects([]);
+        setAbsenceData([]);
+        if (programId) {
+          loadBatches(programId);
+        }
+      };
+
+      const handleBatchChange = (e) => {
+        const batchName = e.target.value;
+        setSelectedBatch(batchName);
+        setSelectedSubject('');
+        setSubjects([]);
+        setAbsenceData([]);
+        if (batchName) {
+          loadSubjects(batchName);
+        }
+      };
+
+      const handleSubjectChange = (e) => {
+        setSelectedSubject(e.target.value);
+        setAbsenceData([]);
+      };
+
+      const handleDateChange = (e) => {
+        setSelectedDate(e.target.value);
+        setAbsenceData([]);
+      };
+
+      const handleAbsenceTypeChange = (studentId, type) => {
+        setAbsenceData(prevData => 
+          prevData.map(student => 
+            student.studentId === studentId
+              ? { ...student, type, isAbsent: !!type }
+              : student
+          )
         );
-    </script>
+      };
+
+      const handleSaveAbsences = () => {
+        if (!selectedBatch || !selectedSubject || !selectedDate) {
+          showAlert('الرجاء اختيار جميع البيانات المطلوبة', 'danger');
+          return;
+        }
+
+        const absenceRecords = {
+          batchName: selectedBatch,
+          subjectCode: selectedSubject,
+          date: selectedDate,
+          absentStudents: absenceData
+            .filter(student => student.isAbsent)
+            .map(student => ({
+              studentId: student.studentId,
+              type: student.type || 'غياب بدون عذر'
+            }))
+        };
+
+        setIsLoading(true);
+        google.script.run
+          .withSuccessHandler(() => {
+            showAlert('تم حفظ بيانات الغياب بنجاح');
+            loadAbsenceData();
+          })
+          .withFailureHandler((error) => {
+            showAlert(error.message || 'حدث خطأ أثناء حفظ بيانات الغياب', 'danger');
+            setIsLoading(false);
+          })
+          .recordAbsence(absenceRecords);
+      };
+
+      const handleSearch = () => {
+        if (!selectedBatch || !selectedSubject || !selectedDate) {
+          showAlert('الرجاء اختيار جميع البيانات المطلوبة', 'danger');
+          return;
+        }
+        loadAbsenceData();
+      };
+
+      return (
+        <div className="container-fluid">
+          <h2 className="mb-4">تسجيل الغياب</h2>
+          
+          <div className="card mb-4">
+            <div className="card-body">
+              <div className="row">
+                <div className="col-md-3 mb-3">
+                  <label className="form-label">البرنامج</label>
+                  <select
+                    className="form-select"
+                    value={selectedProgram}
+                    onChange={handleProgramChange}
+                  >
+                    <option value="">-- اختر البرنامج --</option>
+                    {programs.map((program) => (
+                      <option key={program.programId} value={program.programId}>
+                        {program.programName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="col-md-3 mb-3">
+                  <label className="form-label">الدفعة</label>
+                  <select
+                    className="form-select"
+                    value={selectedBatch}
+                    onChange={handleBatchChange}
+                    disabled={!selectedProgram}
+                  >
+                    <option value="">-- اختر الدفعة --</option>
+                    {batches.map((batch) => (
+                      <option key={batch.batchId} value={batch.name}>
+                        {batch.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="col-md-3 mb-3">
+                  <label className="form-label">المادة</label>
+                  <select
+                    className="form-select"
+                    value={selectedSubject}
+                    onChange={handleSubjectChange}
+                    disabled={!selectedBatch}
+                  >
+                    <option value="">-- اختر المادة --</option>
+                    {subjects.map((subject) => (
+                      <option key={subject.subjectCode} value={subject.subjectCode}>
+                        {subject.subjectCode} - {subject.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="col-md-3 mb-3">
+                  <label className="form-label">التاريخ</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={selectedDate}
+                    onChange={handleDateChange}
+                    disabled={!selectedSubject}
+                  />
+                </div>
+
+                <div className="col-12">
+                  <button
+                    className="btn btn-primary w-100"
+                    onClick={handleSearch}
+                    disabled={!selectedBatch || !selectedSubject || !selectedDate}
+                  >
+                    عرض الطلاب
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {absenceData.length > 0 && (
+            <div className="card">
+              <div className="card-body">
+                <div className="table-responsive">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>اسم الطالب</th>
+                        <th>الحالة</th>
+                        <th>نوع الغياب</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {absenceData.map((student) => (
+                        <tr key={student.studentId}>
+                          <td>{student.studentName}</td>
+                          <td>
+                            <div className="form-check form-switch">
+                              <input
+                                className="form-check-input"
+                                type="checkbox"
+                                checked={student.isAbsent}
+                                onChange={(e) => handleAbsenceTypeChange(
+                                  student.studentId,
+                                  e.target.checked ? 'غياب بدون عذر' : ''
+                                )}
+                              />
+                              <label className="form-check-label">
+                                {student.isAbsent ? 'غائب' : 'حاضر'}
+                              </label>
+                            </div>
+                          </td>
+                          <td>
+                            <select
+                              className="form-select"
+                              value={student.type || ''}
+                              onChange={(e) => handleAbsenceTypeChange(
+                                student.studentId,
+                                e.target.value
+                              )}
+                              disabled={!student.isAbsent}
+                            >
+                              <option value="">-- اختر نوع الغياب --</option>
+                              <option value="غياب بعذر">غياب بعذر</option>
+                              <option value="غياب بدون عذر">غياب بدون عذر</option>
+                            </select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="text-end mt-3">
+                  <button className="btn btn-success" onClick={handleSaveAbsences}>
+                    حفظ الغياب
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function Reports() {
+      // كود التقارير
+    }
+
+    // تحميل التطبيق
+    ReactDOM.render(
+      <App />,
+      document.getElementById('root')
+    );
+  </script>
+
+  <!-- Bootstrap Bundle JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
